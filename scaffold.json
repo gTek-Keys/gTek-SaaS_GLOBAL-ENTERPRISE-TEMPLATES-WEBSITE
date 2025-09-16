@@ -1,0 +1,42 @@
+{
+  "repo": "saas-global-templates-services",
+  "apps": {
+    "gtek-web": {
+      "framework": "nextjs",
+      "pages": {
+        "(marketing)/page.tsx": "import Shell from '@/components/Shell';\nexport default function Home(){\n  return (<Shell><h1 className='text-3xl font-semibold'>gTek GLOBAL</h1><p className='mt-3 text-zinc-600'>Supply-chain + cybersecurity + IDE with trust registry and IPFS vault pinning.</p></Shell>);\n}"
+      },
+      "console": {
+        "page.tsx": "import Shell from '@/components/Shell';\nexport default function Console(){ return (<Shell><h2 className='text-2xl font-semibold'>Console</h2><p>Admin dashboards and vault pinning tools.</p></Shell>);} ",
+        "vault/page.tsx": "'use client';\nimport Shell from '@/components/Shell';\nimport { useState } from 'react';\nexport default function Vault(){ const [cid,setCid]=useState(''); const [crid,setCrid]=useState(''); const [out,setOut]=useState(null);\n async function pin(){ const org_id='0000'; const r=await fetch('/api/ipfs/pin',{method:'POST',body:JSON.stringify({cid,crid,org_id})}); setOut(await r.json()); }\n return (<Shell><h2>Vault Pinning</h2><input className='border' value={cid} onChange={e=>setCid(e.target.value)} placeholder='CID'/><input className='border' value={crid} onChange={e=>setCrid(e.target.value)} placeholder='CRID'/><button onClick={pin}>Pin</button>{out && <pre>{JSON.stringify(out,null,2)}</pre>}</Shell>); }"
+      },
+      "api": {
+        "health/route.ts": "import { NextResponse } from 'next/server';\nexport const runtime='edge';\nexport async function GET(){ return NextResponse.json({ ok:true, ts:new Date().toISOString() }); }",
+        "ipfs/pin/route.ts": "import { NextRequest, NextResponse } from 'next/server';\nimport { randomUUID } from 'crypto';\nexport const runtime='nodejs';\nexport async function POST(req:NextRequest){ const { cid, crid } = await req.json(); if(!cid||!crid) return NextResponse.json({error:'cid+crid required'},{status:400}); const vault_code=`VAULT-${Date.now()}-${randomUUID().slice(0,8)}`; const codex_id=`CODEX-${Date.now()}-${randomUUID().slice(0,6)}`; return NextResponse.json({ok:true,cid,crid,vault_code,codex_id}); }"
+      },
+      "components": {
+        "Shell.tsx": "export default function Shell({children}:{children:React.ReactNode}){ return (<div className='min-h-screen'><nav className='p-3 border-b flex gap-3 text-sm'><a href='/'>Home</a><a href='/console'>Console</a><a href='/console/vault'>Vault</a></nav><div className='p-6'>{children}</div></div>); }"
+      },
+      "lib": {
+        "imos.ts": "export function normalizeCrid(input:string){ const s=input.trim(); if(!/^([A-Za-z0-9-_.:]{4,64})$/.test(s)) throw new Error('Invalid CRID'); return s.toUpperCase(); }"
+      },
+      "configs": {
+        "next.config.mjs": "const nextConfig={ experimental:{serverActions:{allowedOrigins:['*']}}, headers:async()=>[{ source:'/(.*)', headers:[{key:'X-Frame-Options',value:'DENY'},{key:'X-Content-Type-Options',value:'nosniff'},{key:'Referrer-Policy',value:'strict-origin-when-cross-origin'}]}]}; export default nextConfig;",
+        "package.json": "{ \"name\":\"gtek-web\",\"private\":true,\"scripts\":{\"dev\":\"next dev -p 3000\",\"build\":\"next build\"},\"dependencies\":{\"next\":\"14.2.5\",\"react\":\"18.3.1\",\"react-dom\":\"18.3.1\"}}",
+        "tsconfig.json": "{ \"compilerOptions\": { \"target\": \"ES2022\", \"module\":\"ESNext\", \"jsx\":\"preserve\", \"strict\":true } }"
+      }
+    }
+  },
+  "supabase": {
+    "schema.sql": "create table orgs(id uuid primary key default gen_random_uuid(), name text, crid text, created_at timestamptz default now());",
+    "rls.sql": "alter table orgs enable row level security; create policy org_read on orgs for select using (true);"
+  },
+  "config": {
+    "app.yaml": "app:\n  name: gTek GLOBAL\n  region_default: CA",
+    "policy.json": "{ \"supply_chain.import\": { \"regions\": [\"CA\",\"FL\",\"EU\"] } }"
+  },
+  "ci": {
+    ".github/workflows/ci.yml": "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm install\n      - run: npm run build"
+  },
+  "makefile": "dev:\n\tnpm --prefix apps/gtek-web dev\npredeploy:\n\techo 'Run checks...'"
+}

@@ -1,0 +1,2 @@
+postdeploy:
+    node scripts/postdeploy.js

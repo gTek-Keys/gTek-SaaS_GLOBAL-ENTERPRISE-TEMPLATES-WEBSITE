@@ -1,0 +1,32 @@
+name: Compliance
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm install
+      - name: Run predeploy checks
+        run: make predeploy
+      - name: Deploy to Vercel
+        run: echo "Deploy step here (replace with actual Vercel CLI or integration)"
+      - name: Run postdeploy checks
+        run: make postdeploy
+        env:
+          POSTDEPLOY_URL: https://gtek.world
+      - name: Upload compliance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-reports
+          path: .reports/*.json
