@@ -1,0 +1,40 @@
+name: Playwright Smoke Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - name: Enable Corepack (pnpm)
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+      - name: Install deps
+        run: pnpm install --frozen-lockfile=false
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+      - name: Build app
+        run: pnpm --prefix apps/gtek-web build
+      - name: Start app
+        run: pnpm --prefix apps/gtek-web start &
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do
+            if curl -sSf http://localhost:3000/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "Server did not start in time" >&2
+          exit 1
+      - name: Run Playwright smoke
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+        run: npx playwright test -c playwright.config.ts
