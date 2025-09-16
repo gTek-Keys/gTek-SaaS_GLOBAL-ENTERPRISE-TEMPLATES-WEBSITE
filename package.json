@@ -1,0 +1,26 @@
+{
+  "name": "gtek-global-enterprise-templates-website",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "codex": "bin/codex.js"
+  },
+  "scripts": {
+    "dev": "pnpm --prefix apps/gtek-web dev",
+    "build": "pnpm --prefix apps/gtek-web build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test -c playwright.config.ts"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
+    "@playwright/test": "^1.47.2",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "prerender-manifest.js",
+        "server/edge-runtime-webpack.js",
+        "server/middleware.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(.json)?[\\/#\\?]?$",
+          "originalSource": "/api/:path*"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "environments": {
+        "previewModeId": "2c9ccae7a5da05062aff5f6ef49e2f40",
+        "previewModeSigningKey": "5a0c872c1522625ccac1519d02e50ee740ff36635a38936ce9e796dc86b77f8f",
+        "previewModeEncryptionKey": "7f66d6bd65c40c9f7180f612ac09ebee2f726a3e51b384ec6336830caaea2c2a"
+      }
+    }
+  },
+  "functions": {
+    "/api/health/route": {
+      "files": [
+        "server/middleware-build-manifest.js",
+        "server/middleware-react-loadable-manifest.js",
+        "server/next-font-manifest.js",
+        "server/interception-route-rewrite-manifest.js",
+        "prerender-manifest.js",
+        "server/edge-runtime-webpack.js",
+        "server/app/api/health/route.js"
+      ],
+      "name": "app/api/health/route",
+      "page": "/api/health/route",
+      "matchers": [
+        {
+          "regexp": "^/api/health$",
+          "originalSource": "/api/health"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "environments": {
+        "previewModeId": "2c9ccae7a5da05062aff5f6ef49e2f40",
+        "previewModeSigningKey": "5a0c872c1522625ccac1519d02e50ee740ff36635a38936ce9e796dc86b77f8f",
+        "previewModeEncryptionKey": "7f66d6bd65c40c9f7180f612ac09ebee2f726a3e51b384ec6336830caaea2c2a"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ]
+}
