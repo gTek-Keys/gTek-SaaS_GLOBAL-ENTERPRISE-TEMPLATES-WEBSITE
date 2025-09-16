@@ -1,32 +1,132 @@
-name: Compliance
+name: Compliance Pipeline
+
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  compliance:
+  predeploy:
+    name: Pre-Deployment Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-      - name: Install Node.js
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-      - name: Install dependencies
-        run: npm install
+          node-version: 20
+
+      - name: Install deps
+        run: pnpm install
+
       - name: Run predeploy checks
         run: make predeploy
+
+      - name: Upload predeploy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: predeploy-report
+          path: .reports/predeploy-*.json
+
+      - name: Link Compliance Doc
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## 📋 Compliance Playbook
+          See [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
+          EOF
+
+  deploy:
+    name: Vercel Deployment
+    runs-on: ubuntu-latest
+    needs: predeploy
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Deploy to Vercel
-        run: echo "Deploy step here (replace with actual Vercel CLI or integration)"
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: '--prod'
+          working-directory: ./apps/gtek-web
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Link Compliance Doc
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## 🚀 Deployment Completed
+          Compliance steps documented in [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
+          EOF
+
+  postdeploy:
+    name: Post-Deployment Checks
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Run postdeploy checks
         run: make postdeploy
         env:
           POSTDEPLOY_URL: https://gtek.world
-      - name: Upload compliance reports
+
+      - name: Upload postdeploy report
         uses: actions/upload-artifact@v4
         with:
-          name: compliance-reports
-          path: .reports/*.json
+          name: postdeploy-report
+          path: .reports/postdeploy-*.json
+
+      - name: Link Compliance Doc
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## 🔎 Post-Deployment Validation
+          Refer to [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
+          EOF
+
+  runtime-governance:
+    name: Runtime Governance Checks
+    runs-on: ubuntu-latest
+    needs: postdeploy
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Postgres client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Verify user roles
+        run: psql ${{ secrets.DATABASE_URL }} -c "select distinct role from memberships;"
+
+      - name: Audit log test
+        run: curl -s -X POST https://gtek.world/api/ipfs/pin -d '{"cid":"QmTest","crid":"CRID-1234"}'
+
+      - name: Rate limit stress test
+        run: |
+          for i in {1..70}; do curl -s -o /dev/null -w "%{http_code}\n" https://gtek.world/api/health; done
+
+      - name: Backup DB
+        run: pg_dump ${{ secrets.DATABASE_URL }} > db-backup.sql
+
+      - name: Upload governance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-artifacts
+          path: db-backup.sql
+
+      - name: Link Compliance Doc
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## 🔐 Runtime Governance Completed
+          See [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
+          EOF
