@@ -1,0 +1,246 @@
+# .copilot-home.yaml
+# Governance and execution contract for Copilot Home
+# Scope: gTek-SaaS_GLOBAL-ENTERPRISE-TEMPLATES-WEBSITE monorepo
+
+profile:
+  role: "Compliance Architect Copilot"
+  tone: "Pragmatic, compliance-first, fast iteration"
+  priorities:
+    - security
+    - test coverage
+    - compliance evidence
+    - speed of delivery
+
+workflow:
+  default_dir: "."
+  app_dir: "apps/gtek-web"
+  golden_path:
+    - repo
+    - schema
+    - runtime
+    - audit
+    - governance
+    - testing
+    - compliance
+    - contracts
+    - docs
+    - qa
+
+rules:
+  - "Always start backend-first in apps/gtek-web/app/api/*."
+  - "Add/extend frontend only after backend passes lint + test."
+  - "Every backend route requires Vitest tests."
+  - "Every frontend flow requires Playwright coverage."
+  - "Drop milestone reports in reports/milestones/."
+  - "Write compliance notes to COMPLIANCE.md and docs/."
+  - "Enforce env guards; never hardcode secrets."
+  - "Apply rate limiting and audit logging to all APIs."
+  - "All changes must pass Compliance Pipeline CI/CD."
+  - "Ask for clarification only if absolutely necessary; otherwise act autonomously."
+
+outputs:
+  reports_dir: "reports/"
+  compliance_file: "COMPLIANCE.md"
+  sbom_dir: "reports/sbom/"
+  docs_dir: "docs/"
+
+ci_pipeline:
+  stages:
+    predeploy:
+      - lint
+      - test
+      - sbom
+    deploy:
+      - vercel
+    postdeploy:
+      - audit-drill
+    runtime:
+      - playwright-e2e
+
+rate_limit:
+  default: 5/minute
+  distributed: upstash
+  audit_on: true
+
+# End of .copilot-home.yaml
+version: 1
+
+about:
+  name: gTek Copilot Home
+  description: >-
+    Operational guidance for autonomous iterations in this repo. Encodes the
+    10-point governance sequence and golden paths (backend-first → frontend →
+    tests → docs → CI) with repo-specific conventions.
+
+defaults:
+  workingDirectory: .
+  frontendAppPath: apps/gtek-web
+  packagesGlob: packages/*
+  reportsDir: reports
+  runtimeReportsDir: .reports
+  apiRoot: apps/gtek-web/app/api
+  consoleRoot: apps/gtek-web/app/console
+  envRequired:
+    - NEXT_PUBLIC_SUPABASE_URL
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY
+    - SUPABASE_SERVICE_ROLE
+  envOptional:
+    - SUPABASE_URL
+    - DATABASE_URL
+    - PINATA_JWT
+    - WEB3_STORAGE_TOKEN
+    - UPSTASH_REDIS_REST_URL
+    - UPSTASH_REDIS_REST_TOKEN
+
+sequence:
+  # Golden 10 (repo → schema → runtime → audit → governance → testing → compliance → contracts → docs → QA)
+  - repo
+  - schema
+  - runtime
+  - audit
+  - governance
+  - testing
+  - compliance
+  - contracts
+  - docs
+  - qa
+
+rules:
+  - id: stay-inside-monorepo
+    when: always
+    do:
+      - preferPaths:
+          - apps/gtek-web/**
+          - packages/**
+          - reports/**
+          - .reports/**
+      - avoidCreatingOutsideRepo: true
+
+  - id: prefer-golden-path
+    when: planning
+    do:
+      - followSequence: true
+      - doNotReorderUnlessOverridden: true
+
+  - id: autonomous-backend-first
+    when: taskReceived
+    do:
+  - startWithBackend: true
+  - backendApiRoot: "${defaults.apiRoot}"
+      - patterns:
+          supabaseClient: apps/gtek-web/lib/supa.ts
+          auditLogging: apps/gtek-web/app/api/governance/audit/route.ts
+      - ensure:
+          - rateLimit: apps/gtek-web/middleware.ts
+          - envGuards: true
+          - auditOn429: true
+
+  - id: then-frontend-console
+    when: backendGreen
+    do:
+  - scaffoldUnder: "${defaults.consoleRoot}"
+      - dataAccess: typedFetchers # prefer typed wrappers over raw fetch
+
+  - id: enforce-testing-harness
+    when: newCodeAdded
+    do:
+      - unitTests:
+          runner: vitest
+          locationGlobs:
+            - apps/gtek-web/**/*.test.{ts,tsx}
+      - e2eTests:
+          runner: playwright
+          locationGlobs:
+            - tests/e2e/**/*.spec.{ts,tsx}
+      - neverLeaveUntested: true
+      - hooks:
+          upstashMock: allowed # mock @upstash/* for distributed limiter tests
+
+  - id: always-write-reports
+    when: milestoneOrCheck
+    do:
+    - write:
+          milestones: reports/milestones
+          compliance: reports/compliance
+          sbom: reports/sbom
+
+  - id: secure-by-default
+    when: apiTouched
+    do:
+      - enforceRateLimit: apps/gtek-web/middleware.ts
+      - log:
+          on429: audit_logs
+          onError: audit_logs
+      - envGuards: true
+
+  - id: docs-are-mandatory
+    when: featureMerged
+    do:
+    - update:
+          - COMPLIANCE.md
+      - include:
+          - apiSummary
+          - testCoverageNote
+          - governanceLinkage
+
+  - id: cicd-is-law
+    when: pullRequest
+    do:
+      - pipelines:
+          - name: Compliance Pipeline
+            file: .github/workflows/compliance.yml
+            gates:
+              - predeploy: unitTests+coverage
+              - deploy: vercel
+              - postdeploy: runtime checks
+              - e2e-smoke: playwright against prod
+              - runtime-governance: audit/rate-limit/backup
+
+  - id: ask-then-act
+    when: ambiguity
+    do:
+      - promptOnceForClarification: true
+      - otherwiseProceed: backend→frontend→tests→docs→ci
+
+tasks:
+  backend:
+    checks:
+  - ensurePathsExist: [ "${defaults.apiRoot}" ]
+  - ensureEnvPresent: "${defaults.envRequired}"
+    steps:
+      - addOrExtendEndpointsFollowingPatterns: true
+      - writeVitestForNewRoutes: true
+      - run: pnpm coverage
+
+  frontend:
+    after: backend
+    steps:
+  - scaffoldConsolePagesUnder: "${defaults.consoleRoot}"
+      - addPlaywrightSmoke: true
+      - run: pnpm e2e
+
+  compliance:
+    steps:
+      - runComplianceWorkflow: .github/workflows/compliance.yml
+      - ensureReports:
+          - .reports/*
+          - reports/milestones/*
+
+ci:
+  workflows:
+    - file: .github/workflows/compliance.yml
+      jobs:
+        - predeploy
+        - deploy
+        - postdeploy
+        - runtime-governance
+        - e2e-smoke
+  e2e:
+    baseUrlEnv: PLAYWRIGHT_BASE_URL
+    defaultBaseUrl: https://gtek.world
+
+notes:
+  - The frontend app path in this repo is apps/gtek-web (not apps/web).
+  - Milestones API respects MILESTONES_DIR for testability.
+  - IPFS pin route and other APIs are mock-friendly when envs are absent.
+  - Upstash distributed limiter is optional; mock when testing.
