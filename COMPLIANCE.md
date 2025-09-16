@@ -1,108 +1,99 @@
-# gTek GLOBAL — Continuous Compliance Instructions
+gTek GLOBAL  Compliance Playbook (Master Guide)
 
-This file is an operational script for GitHub Copilot.
-Follow each step in order — do not skip.
+This file defines all compliance requirements for development, deployment, and runtime governance.
+Every sequence must be executed and logged. Reports are stored in .reports/ and attached to signed releases.
 
----
+
 
-🔹 **1. Run Pre-Deploy Checks**
 
-    make predeploy
+a Sequence 1  Pre-Deployment (10 Steps)
+	1.	Run make predeploy  generates .reports/predeploy-<timestamp>.json.
+	2.	Confirm repo hygiene  layout matches scaffold.json, no secrets in history.
+	3.	Apply Supabase schema (schema.sql), RLS (rls.sql), and seeds (seed.sql).
+	4.	Ensure required env vars (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE).
+	5.	Build Next.js app: pnpm -C apps/gtek-web build.
+	6.	Test Vault API: /api/ipfs/pin returns vault_code, /api/imos/bind sets CRID.
+	7.	Compile smart contracts: npx hardhat compile.
+	8.	Verify compliance hub renders SOC2/NIST/ISO maps and region toggles work.
+	9.	CI/CD pipeline must be green; SBOM generated.
+	10.	GO/NO-GO: only deploy if all checks = ok.
 
-- This executes scripts/predeploy.js.
-- It validates schema, RLS, env vars, build, contracts, IPFS, compliance, and audit log.
-- The script writes .reports/predeploy-<timestamp>.json.
-- Do not proceed unless every check is "ok".
+
 
----
 
-🔹 **2. Push to GitHub**
+a Sequence 2  Post-Deployment (10 Steps)
+	1.	Run make postdeploy  generates .reports/postdeploy-<timestamp>.json.
+	2.	Confirm gtek.world resolves; SSL cert valid  90 days.
+	3.	Homepage + /api/health return 200 and { ok: true }.
+	4.	/console page loads clean.
+	5.	Vault: paste CID + CRID  response includes vault_code + codex_id.
+	6.	Supabase audit logs show entry for vault pin.
+	7.	IPFS gateway resolves pinned CID.
+	8.	ERC-721 deployed on Sepolia; mint NFT  metadata resolves.
+	9.	Compliance hub accessible; policy toggles apply region restrictions.
+	10.	Attach pre/post reports + SBOM to GitHub release.
 
-    git add .
-    git commit -S -m "deploy: passing predeploy checks"
-    git push origin main
+
 
-- Commits must be signed (-S).
-- CI/CD runs .github/workflows/ci.yml → build + predeploy.
 
----
+a Sequence 3  Runtime Governance (10 Steps)
+	1.	Check roles in Supabase: only owner, admin, member.
+	2.	Trigger /api/ipfs/pin  confirm audit_logs entry.
+	3.	Resolve vault code  confirm CID + CRID link.
+	4.	Validate CID resolves via IPFS gateway.
+	5.	Run Hardhat treasury snapshot: npx hardhat run scripts/snapshot.js --network sepolia.
+	6.	Stress test /api/health with 60 calls/min  expect HTTP 429.
+	7.	Test region compliance toggle (CA  EU  ROW).
+	8.	Download release artifacts; confirm presence of reports + SBOM.
+	9.	Backup DB: pg_dump $SUPABASE_DB > backups/db-$(date +%F).sql; restore to test DB.
+	10.	Simulate DR: pause app, redeploy, restore DB; confirm RTO  4h, RPO  1h.
 
-🔹 **3. Deploy to Vercel**
+
 
-    vercel --prod --yes
 
-- Project auto-deploys to gtek.world.
-- Env vars are pulled from .env.local.
+a Sequence 4  Final 10-Point Completion Plan (Exhaustive)
+	1.	Monorepo Initialization & Config Canon
+		Scaffold from scaffold.json.
+		Verify apps/, supabase/, config/, .github/, .devcontainer/, Makefile.
+		Signed commits only.
+	2.	Database Schema + RLS Enforcement
+		Apply schema, RLS, seeds.
+		Confirm audit log inserts on actions.
+	3.	Next.js Web App Build (Vercel-Ready)
+		Home + Console render.
+		/api/health, /api/ipfs/pin, /api/imos/bind functional.
+	4.	Vault Pinning + CRID/IMOS Binding
+		Vault code + codex_id generated.
+		Entries stored in vaults + external_registry_links.
+	5.	NFT + Smart Contracts Integration
+		ERC-721 compiled & deployed.
+		NFT minted with IPFS metadata.
+	6.	Compliance Hub & Policy Gates
+		SOC2/NIST/ISO maps visible.
+		Region toggles apply policy.json.
+	7.	CI/CD + Continuous Compliance
+		GitHub Actions runs predeploy  deploy  postdeploy  governance.
+		Reports uploaded. SBOM attached.
+	8.	Observability + Security Governance
+		Structured logs.
+		Audit logs append-only, immutable.
+		Secrets rotated before deploy.
+		Rate limits tested.
+	9.	Domain + Deployment Validation
+		gtek.world resolves.
+		SSL valid.
+		Health API returns { ok: true }.
+	10.	Governance, Succession & DR
+		Trustees hold keys.
+		DB backups tested.
+		DR simulation proves RTO  4h, RPO  1h.
+		Signed release tagged vYYYY.MM.DD.
 
----
+
 
-🔹 **4. Run Post-Deploy Checks**
+ Completion Rule:
+A release is only valid when all four sequences (Pre, Post, Runtime, Final) pass and artifacts are archived.
 
-    make postdeploy
+
 
-- This executes scripts/postdeploy.js.
-- It probes live URLs:
-    - https://gtek.world/
-    - https://gtek.world/console
-    - https://gtek.world/api/health
-- The script writes .reports/postdeploy-<timestamp>.json.
-- Do not mark milestone complete unless every endpoint returns ok.
-
----
-
-🔹 **5. Confirm Domain & SSL**
-- Verify gtek.world resolves correctly.
-- Check SSL cert expiry: must be ≥ 90 days.
-- Confirm wildcard *.gtek.world resolves if required.
-
----
-
-🔹 **6. Confirm Vault & CRID Binding**
-- Go to /console/vault.
-- Enter a test CID and CRID.
-- Verify response includes:
-    - vault_code
-    - codex_id
-- Check Supabase vaults and external_registry_links tables for new entries.
-
----
-
-🔹 **7. Confirm IPFS Integration**
-- Run ipfs add test.txt locally.
-- Verify CID resolves via ipfs.io/ipfs/<CID>.
-- Pin CID through /console/vault.
-- CID must match vault record in Supabase.
-
----
-
-🔹 **8. Confirm Smart Contracts**
-- Navigate to contracts/.
-- Compile and deploy ERC-721:
-
-    npx hardhat compile
-    npx hardhat run scripts/deploy.js --network sepolia
-
-- Mint 1 token to test wallet.
-- Verify token metadata loads from IPFS.
-
----
-
-🔹 **9. Confirm Compliance Hub**
-- Visit /compliance.
-- Verify SOC2 + NIST maps render.
-- Switch region toggle (CA → EU) and confirm policy gates.
-- Trigger rate limits with rapid API calls (expect HTTP 429).
-
----
-
-🔹 **10. Archive Reports**
-- Upload .reports/predeploy-*.json and .reports/postdeploy-*.json as release artifacts.
-- Attach SBOM file from CI build.
-- Confirm audit logs in Supabase match actions.
-
----
-
-✅ When all 10 steps are complete:
-- Mark milestone as done.
-- Create a signed release in GitHub.
-- Tag with vYYYY.MM.DD.
+Would you like me to now inline link this COMPLIANCE.md into your GitHub Actions workflow so every run posts a link back to the master compliance doc in the job summary?
