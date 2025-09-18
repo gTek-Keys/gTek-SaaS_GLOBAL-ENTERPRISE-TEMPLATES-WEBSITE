@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "reason": "cosign not installed",
+  "sbom": "reports/sbom/bom-1758070816141.json"
+}

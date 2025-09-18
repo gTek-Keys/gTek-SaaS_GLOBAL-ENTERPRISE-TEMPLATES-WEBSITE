@@ -1,0 +1,27 @@
+{
+  "timestamp": "2025-09-17T04:46:02.780Z",
+  "status": "ok",
+  "checks": {
+    "files": {
+      "README.md": "ok",
+      "package.json": "ok",
+      ".github/workflows/compliance.yml": "ok"
+    }
+  },
+  "envHints": {
+    "SUPABASE_URL": "missing",
+    "SUPABASE_ANON_KEY": "missing",
+    "VERCEL_TOKEN": "set",
+    "VERCEL_ORG_ID": "missing",
+    "VERCEL_PROJECT_ID": "missing",
+    "BASE_URL": "missing"
+  },
+  "coverage": {
+    "dir": "absent",
+    "summary": "absent"
+  },
+  "notes": [
+    "This report is informational and does not fail CI.",
+    "Set BASE_URL for postdeploy checks to query your running app."
+  ]
+}

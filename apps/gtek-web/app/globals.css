@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global resets or CSS variables can go here */
+html, body { height: 100%; }

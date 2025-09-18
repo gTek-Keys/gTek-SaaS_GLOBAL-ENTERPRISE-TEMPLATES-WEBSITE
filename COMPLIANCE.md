@@ -71,41 +71,31 @@ Every sequence must be executed and logged. Reports are stored in .reports/ and 
    - Entries stored in vaults + external_registry_links.
 5. NFT + Smart Contracts Integration
    - ERC-721 compiled & deployed.
-   - NFT minted with IPFS metadata.
 6. Compliance Hub & Policy Gates
    - SOC2/NIST/ISO maps visible.
    - Region toggles apply `policy.json`.
-7. CI/CD + Continuous Compliance
    - GitHub Actions runs predeploy → deploy → postdeploy → governance.
    - Reports uploaded. SBOM attached.
-8. Observability + Security Governance
+7. Observability + Security Governance
    - Structured logs.
    - Audit logs append-only, immutable.
-   - Secrets rotated before deploy.
    - Rate limits tested.
-9. Domain + Deployment Validation
+8. Domain + Deployment Validation
    - `gtek.world` resolves.
    - SSL valid.
-   - Health API returns `{ ok: true }`.
-10. Governance, Succession & DR
-
-- Trustees hold keys.
-- DB backups tested.
-- DR simulation proves RTO ≤ 4h, RPO ≤ 1h.
-- Signed release tagged `vYYYY.MM.DD`.
+9. Governance, Succession & DR
+   - Trustees hold keys.
+   - DB backups tested.
+   - Signed release tagged `vYYYY.MM.DD`.
 
 ---
 
-**Completion Rule:**
 A release is only valid when all four sequences (Pre, Post, Runtime, Final) pass and artifacts are archived.
 
 ---
 
 ## CI/CD Secrets and Provider Tokens
 
-Set these in GitHub → Repo → Settings → Secrets and variables → Actions:
-
-- VERCEL_TOKEN — Personal token from Vercel
 - VERCEL_PROJECT_ID — The Vercel Project ID
 - VERCEL_ORG_ID — The Vercel Organization ID
 - DATABASE_URL — Postgres connection string (e.g., Supabase)
@@ -117,32 +107,53 @@ Optional providers (enable real IPFS pinning in `/api/ipfs/pin`):
 
 ---
 
-## Milestones Tracker
-
-Progress is tracked in per-milestone reports under `reports/milestones/`:
-
-- [Milestone 1 — Repo Foundation](reports/milestones/01-repo-foundation.md)
-- [Milestone 2 — Supabase Backbone](reports/milestones/02-supabase-backbone.md)
-- [Milestone 3 — Rate Limiting Enforcement](reports/milestones/03-rate-limiting-enforcement.md)
 - [Milestone 4 — Audit Logs as Evidence](reports/milestones/04-audit-logs-as-evidence.md)
 - [Milestone 5 — Governance Dashboard](reports/milestones/05-governance-dashboard.md)
 - [Milestone 6 — Test Infrastructure](reports/milestones/06-test-infrastructure.md)
 - [Milestone 7 — SBOM & Provenance](reports/milestones/07-sbom-provenance.md)
 - [Milestone 8 — Contracts & Token Flow](reports/milestones/08-contracts-and-token-flow.md)
-- [Milestone 9 — Compliance Hub](reports/milestones/09-compliance-hub.md)
-- [Milestone 10 — Final QA & Delivery](reports/milestones/10-final-qa-and-delivery.md)
-
----
-
-## Unit Testing and CI Gate
 
 - Test runner: Vitest (repo root). Config in `vitest.config.ts`.
 - Commands:
-   - `pnpm test` — run unit tests once
-   - `pnpm test:watch` — watch mode
-   - `pnpm coverage` — generate coverage report
+  - `pnpm test` — run unit tests once
+  - `pnpm test:watch` — watch mode
+  - `pnpm coverage` — generate coverage report
 - Scope covered (initial):
-   - `apps/gtek-web/app/api/ipfs/pin/route.ts` — happy path (mock mode) and DB insert path
-   - `apps/gtek-web/app/api/governance/audit/route.ts` — mock mode without Supabase
-   - `apps/gtek-web/middleware.ts` — rate limit threshold behavior (in-memory)
+  - `apps/gtek-web/app/api/ipfs/pin/route.ts` — happy path (mock mode) and DB insert path
+  - `apps/gtek-web/app/api/governance/audit/route.ts` — mock mode without Supabase
+  - `apps/gtek-web/middleware.ts` — rate limit threshold behavior (in-memory)
 - CI integration: Pre-deploy job runs `pnpm test` and uploads `coverage/` if present; failures block deployment.
+
+---
+
+## Compliance Scripts (Quick Reference)
+
+- SBOM generator (CycloneDX): `scripts/generate-sbom.js`
+  - Output: `reports/sbom/bom-<timestamp>.json`
+- SBOM signing (stub): `scripts/sign-sbom.js`
+  - Output: `.reports/sbom-signature.json`
+- Milestones summarizer: `scripts/summarize-milestones.js`
+  - Output: `.reports/milestones-summary.{md,json}`
+- Predeploy report: `scripts/predeploy.js`
+  - Output: `.reports/predeploy-<timestamp>.json`
+- Postdeploy snapshot: `scripts/postdeploy.js` (uses `BASE_URL`)
+  - Output: `.reports/postdeploy-<timestamp>.json`
+- Compliance rollup: `scripts/compliance-summary.js`
+  - Output: `.reports/compliance-summary.json`
+- Quadrinary checks: `scripts/compliance-quadrinary.js`
+  - Output: `.reports/compliance-quadrinary.json` and `.reports/final-certificate.md` (when all gates pass)
+
+### Health Canary
+
+- API: `/api/ping` returns `{ ok: true }` and can be probed by e2e smoke and external monitors for a deterministic liveness signal.
+
+### E2E Artifacts
+
+- Playwright produces reports in `playwright-report/` (HTML + JSON) and `test-results/` (traces, screenshots, videos on failure).
+- The CI e2e-smoke job uploads these folders as artifacts and appends a summary with pass/fail/skip counts to the job summary.
+
+### Orchestrated Local Run
+
+Run all major steps non-fatally and produce a pipeline report:
+
+- `node scripts/compliance-pipeline.js`

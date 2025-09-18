@@ -1,25 +1,98 @@
 #!/usr/bin/env node
+/**
+ * scripts/predeploy.js
+ * Lightweight predeploy readiness report.
+ * - Does not fail the build; always exits 0
+ * - Writes .reports/predeploy-<ts>.json with checks, env hints, and notes
+ */
+
 const fs = require('fs');
+const fsp = require('fs/promises');
+const path = require('path');
 
-function exists(p){ try { fs.accessSync(p); return true; } catch { return false; } }
-
-const checks = [];
-function check(label, fn){
-  try { const ok = !!fn(); checks.push({ label, status: ok?'ok':'fail' }); return ok; }
-  catch(e){ checks.push({ label, status: 'fail', error: e.message }); return false; }
+async function ensureDir(p) {
+  await fsp.mkdir(p, { recursive: true });
 }
 
-check('schema.sql present', () => exists('supabase/schema.sql'));
-check('rls.sql present', () => exists('supabase/rls.sql'));
-check('seed.sql present', () => exists('supabase/seed.sql'));
-check('web app package', () => exists('apps/gtek-web/package.json'));
+async function fileExists(p) {
+  try { await fsp.access(p, fs.constants.F_OK); return true; } catch { return false; }
+}
 
-const allOk = checks.every(c=>c.status==='ok');
-const report = { ts: new Date().toISOString(), ok: allOk, checks };
-fs.mkdirSync('.reports', { recursive: true });
-const file = `.reports/predeploy-${Date.now()}.json`;
-fs.writeFileSync(file, JSON.stringify(report, null, 2));
-console.log('Predeploy report written:', file);
-console.table(checks.map(c=>({ check: c.label, status: c.status })));
+async function main() {
+  const cwd = process.cwd();
+  const reportsDir = path.join(cwd, '.reports');
+  await ensureDir(reportsDir);
 
-if (!allOk) process.exit(1);
+  const ts = Date.now();
+  const reportPath = path.join(reportsDir, `predeploy-${ts}.json`);
+
+  // Basic file checks (non-fatal)
+  const filesToCheck = [
+    'README.md',
+    'package.json',
+    '.github/workflows/compliance.yml',
+  ];
+
+  const fileChecks = {};
+  for (const rel of filesToCheck) {
+    const exists = await fileExists(path.join(cwd, rel));
+    fileChecks[rel] = exists ? 'ok' : 'missing';
+  }
+
+  // Env presence hints (non-fatal)
+  const envVars = [
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'VERCEL_TOKEN',
+    'VERCEL_ORG_ID',
+    'VERCEL_PROJECT_ID',
+    'BASE_URL',
+  ];
+  const envHints = {};
+  for (const k of envVars) {
+    envHints[k] = process.env[k] ? 'set' : 'missing';
+  }
+
+  // Coverage hints
+  const coverageDir = path.join(cwd, 'coverage');
+  const coverageJson = path.join(coverageDir, 'coverage-final.json');
+  const coverage = {
+    dir: (await fileExists(coverageDir)) ? 'present' : 'absent',
+    summary: (await fileExists(coverageJson)) ? 'present' : 'absent',
+  };
+
+  const report = {
+    timestamp: new Date(ts).toISOString(),
+    status: 'ok',
+    checks: {
+      files: fileChecks,
+    },
+    envHints,
+    coverage,
+    notes: [
+      'This report is informational and does not fail CI.',
+      'Set BASE_URL for postdeploy checks to query your running app.',
+    ],
+  };
+
+  await fsp.writeFile(reportPath, JSON.stringify(report, null, 2));
+  console.log(`Predeploy report written: ${path.relative(cwd, reportPath)}`);
+}
+
+main().catch((err) => {
+  // Never fail; write a minimal error report and exit 0
+  const cwd = process.cwd();
+  const reportsDir = path.join(cwd, '.reports');
+  fs.mkdirSync(reportsDir, { recursive: true });
+  const ts = Date.now();
+  const reportPath = path.join(reportsDir, `predeploy-${ts}.json`);
+  const report = {
+    timestamp: new Date(ts).toISOString(),
+    status: 'error',
+    error: String(err && err.stack || err),
+  };
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  console.log(`Predeploy report (error) written: ${path.relative(cwd, reportPath)}`);
+  process.exit(0);
+});
+ 

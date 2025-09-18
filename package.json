@@ -2,16 +2,28 @@
   "name": "gtek-global-enterprise-templates-website",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "bin": {
     "codex": "bin/codex.js"
   },
   "scripts": {
-    "dev": "pnpm --prefix apps/gtek-web dev",
-    "build": "pnpm --prefix apps/gtek-web build",
-    "test": "vitest run",
+    "dev": "pnpm --filter gtek-web dev",
+    "build": "pnpm --filter gtek-web build",
+    "test": "pnpm --filter gtek-web test || vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "e2e": "playwright test -c playwright.config.ts"
+    "e2e": "playwright test -c playwright.config.ts",
+  "predeploy:full": "bash scripts/predeploy.sh",
+  "deploy": "node scripts/deploy-chain.js",
+  "predeploy": "bash scripts/predeploy.sh",
+  "postdeploy": "bash scripts/postdeploy.sh",
+    "sbom": "node scripts/generate-sbom.js",
+    "milestones": "node scripts/summarize-milestones.js",
+    "rollup": "node scripts/compliance-summary.js",
+    "quadrinary": "node scripts/compliance-quadrinary.js",
+    "sign:sbom": "node scripts/sign-sbom.js",
+    "compliance:orchestrate": "node scripts/compliance-pipeline.js",
+    "compliance:all": "npm run predeploy && npm run sbom && npm run sign:sbom && npm run milestones && npm run rollup && npm run quadrinary"
   },
   "workspaces": [
     "apps/*",

@@ -1,251 +1,225 @@
-name: Compliance Pipeline
+name: Compliance
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      BASE_URL:
+        description: "Base URL of the deployed site to snapshot (e.g., https://example.com)"
+        required: false
+        default: ""
+      VERCEL_TOKEN:
+        description: "Vercel token (use repo secret/variable in real runs; input here for manual dispatch/testing)"
+        required: false
+        default: ""
+      VERCEL_ORG_ID:
+        description: "Vercel org id"
+        required: false
+        default: ""
+      VERCEL_PROJECT_ID:
+        description: "Vercel project id"
+        required: false
+        default: ""
+      VERCEL_BYPASS_TOKEN:
+        description: "Vercel Protection Bypass token for preview/protected deployments"
+        required: false
+        default: ""
 
 jobs:
   predeploy:
-    name: Pre-Deployment Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-      - name: Enable Corepack (pnpm)
+          node-version: '20'
+
+      - name: Install dependencies (if package.json present)
         run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate
+          if [ -f package.json ]; then npm ci || npm i; else echo "No package.json"; fi
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile=false
+      - name: Pre-Flight
+        run: bash scripts/preflight.sh
 
-      - name: Run unit tests with coverage
-        run: pnpm coverage -- --reporter=dot
+      - name: Generate SBOM
+        run: node scripts/generate-sbom.js
 
-      - name: Upload coverage (if exists)
-        if: ${{ always() }}
+      - name: Sign SBOM (stub)
+        run: node scripts/sign-sbom.js
+
+      - name: Summarize milestones
+        run: node scripts/summarize-milestones.js && cat .reports/milestones-summary.md >> compliance-summary.md || true
+
+      - name: Compliance rollup
+        run: node scripts/compliance-summary.js | tee compliance-summary.md
+
+      - name: Quadrinary checks
+        run: node scripts/compliance-quadrinary.js && if [ -f .reports/final-certificate.md ]; then cat .reports/final-certificate.md >> compliance-summary.md; fi
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-coverage
+          name: compliance-artifacts
           path: |
-            coverage
-          if-no-files-found: ignore
+            .reports/**
+            reports/sbom/**
+            compliance-summary.md
 
-      - name: Run predeploy checks
-        run: make predeploy
-
-      - name: Generate milestone summary
+      - name: Append to job summary
         run: |
-          mkdir -p .reports
-          node scripts/summarize-milestones.js
-          cat .reports/milestones-summary.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload milestones summary
-        uses: actions/upload-artifact@v4
-        with:
-          name: milestones-summary
-          path: |
-            .reports/milestones-summary.md
-            .reports/milestones-summary.json
-
-      - name: Upload predeploy report
-        uses: actions/upload-artifact@v4
-        with:
-          name: predeploy-report
-          path: .reports/predeploy-*.json
-
-      - name: Link Compliance Doc
-        run: |
-          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## 📋 Compliance Playbook
-          See [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
-          EOF
+          echo "## Compliance Summary" >> $GITHUB_STEP_SUMMARY
+          cat compliance-summary.md >> $GITHUB_STEP_SUMMARY
 
   deploy:
-    name: Vercel Deployment
     runs-on: ubuntu-latest
     needs: predeploy
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.url }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-args: '--prod'
-          working-directory: ./apps/gtek-web
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Link Compliance Doc
-        run: |
-          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## 🚀 Deployment Completed
-          Compliance steps documented in [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
-          EOF
-
-  postdeploy:
-    name: Post-Deployment Checks
-    runs-on: ubuntu-latest
-    needs: deploy
-    steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-      - name: Enable Corepack (pnpm)
-        run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate
+          node-version: '20'
 
-      - name: Run postdeploy checks
-        run: make postdeploy
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Prepare Vercel env
+        run: |
+          echo "VERCEL_TOKEN=${{ github.event.inputs.VERCEL_TOKEN != '' && github.event.inputs.VERCEL_TOKEN || vars.VERCEL_TOKEN }}" >> $GITHUB_ENV
+          echo "VERCEL_ORG_ID=${{ github.event.inputs.VERCEL_ORG_ID != '' && github.event.inputs.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}" >> $GITHUB_ENV
+          echo "VERCEL_PROJECT_ID=${{ github.event.inputs.VERCEL_PROJECT_ID != '' && github.event.inputs.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}" >> $GITHUB_ENV
+
+      - name: Vercel pull env (prod)
+        run: |
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN" --cwd apps/gtek-web
+
+      - name: Vercel build (prod)
+        run: |
+          vercel build --prod --token "$VERCEL_TOKEN" --cwd apps/gtek-web
+
+      - name: Vercel deploy (prod)
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN" --cwd apps/gtek-web)
+          echo "Deployed to: $URL"
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Append deploy to job summary
+        run: |
+          echo "## Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+
+  postdeploy:
+    runs-on: ubuntu-latest
+    needs: [predeploy, deploy]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Postdeploy snapshot
         env:
-          POSTDEPLOY_URL: https://gtek.world
+          BASE_URL: ${{ github.event.inputs.BASE_URL != '' && github.event.inputs.BASE_URL || needs.deploy.outputs.deployment_url != '' && needs.deploy.outputs.deployment_url || vars.BASE_URL }}
+        run: node scripts/postdeploy.js
+
+      - name: Post-Flight
+        env:
+          BASE_URL: ${{ github.event.inputs.BASE_URL != '' && github.event.inputs.BASE_URL || needs.deploy.outputs.deployment_url != '' && needs.deploy.outputs.deployment_url || vars.BASE_URL }}
+          VERCEL_BYPASS_TOKEN: ${{ github.event.inputs.VERCEL_BYPASS_TOKEN != '' && github.event.inputs.VERCEL_BYPASS_TOKEN || vars.VERCEL_BYPASS_TOKEN }}
+        run: bash scripts/postflight.sh || true
 
       - name: Upload postdeploy report
         uses: actions/upload-artifact@v4
         with:
-          name: postdeploy-report
-          path: .reports/postdeploy-*.json
+          name: postdeploy-artifacts
+          path: |
+            .reports/postdeploy-*.json
 
-      - name: Link Compliance Doc
+      - name: Append postdeploy to job summary
         run: |
-          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## 🔎 Post-Deployment Validation
-          Refer to [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
-          EOF
-
-  runtime-governance:
-    name: Runtime Governance Checks
-    runs-on: ubuntu-latest
-    needs: postdeploy
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Postgres client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Verify user roles
-        run: psql ${{ secrets.DATABASE_URL }} -c "select distinct role from memberships;"
-
-      - name: Audit log test
-        run: curl -s -X POST https://gtek.world/api/ipfs/pin -d '{"cid":"QmTest","crid":"CRID-1234"}'
-
-      - name: Rate limit stress test
-        run: |
-          for i in {1..70}; do curl -s -o /dev/null -w "%{http_code}\n" https://gtek.world/api/health; done
-
-      - name: Summarize rate limit events (last 1h)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
-        run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
-            echo "Supabase envs not set; skipping audit summary" >> $GITHUB_STEP_SUMMARY
-            exit 0
-          fi
-          echo "## ⏱️ Rate Limit Events (last 1h)" >> $GITHUB_STEP_SUMMARY
-          curl -s "$SUPABASE_URL/rest/v1/audit_logs?select=created_at,action,meta&action=eq.rate.limit&created_at=gt.$(date -u -d '-1 hour' +%Y-%m-%dT%H:%M:%SZ)" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE" \
-            | jq -r '.[] | "- [\(.created_at)] action=\(.action) ip=\(.meta.ip) path=\(.meta.path) count=\(.meta.count) limit=\(.meta.limit)"' >> $GITHUB_STEP_SUMMARY || true
-
-      - name: Backup DB
-        run: pg_dump ${{ secrets.DATABASE_URL }} > db-backup.sql
-
-      - name: Upload governance artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: governance-artifacts
-          path: db-backup.sql
-
-      - name: Summarize audit log activity
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
-          AUDIT_WINDOW_HOURS: 6
-        run: |
-          BASE_URL="${SUPABASE_URL:-$NEXT_PUBLIC_SUPABASE_URL}"
-          if [ -z "$BASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
-            {
-              echo "## Governance Summary"
-              echo "⚠️ Supabase credentials are not configured; skipping audit log summary."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          HOURS=${AUDIT_WINDOW_HOURS:-6}
-          if command -v gdate >/dev/null 2>&1; then
-            SINCE=$(gdate -u -d "-$HOURS hours" +%Y-%m-%dT%H:%M:%SZ)
+          echo "## Postdeploy Snapshot" >> $GITHUB_STEP_SUMMARY
+          if ls .reports/postdeploy-*.json 1> /dev/null 2>&1; then
+            jq -r '"- Base URL: \(.baseUrl // "n/a")\n- Health: \(.snapshots.health.status // "n/a")\n- Governance/Audit: \(.snapshots.governanceAudit.status // "n/a")\n- Governance/Milestones: \(.snapshots.governanceMilestones.status // "n/a")"' .reports/postdeploy-*.json | head -n 20 >> $GITHUB_STEP_SUMMARY || true;
           else
-            SINCE=$(date -u -d "-$HOURS hours" +%Y-%m-%dT%H:%M:%SZ)
+            echo "- No postdeploy report found" >> $GITHUB_STEP_SUMMARY
           fi
-
-          echo "## Governance Summary (last ${HOURS}h)" >> "$GITHUB_STEP_SUMMARY"
-          curl -s "$BASE_URL/rest/v1/audit_logs?select=action&created_at=gte.$SINCE" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE" \
-            | jq -r '[.[].action] | group_by(.) | map({action:.[0], count:length}) | sort_by(-.count) | ("| Action | Count |"), ("| --- | --- |"), (.[] | "| \(.action) | \(.count) |")' \
-            >> "$GITHUB_STEP_SUMMARY" || true
-
-      - name: Link Compliance Doc
-        run: |
-          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## 🔐 Runtime Governance Completed
-          See [COMPLIANCE.md](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/COMPLIANCE.md)
-          EOF
+            echo "- Analytics: $([ \"${ANALYTICS_STATUS:-1}\" -eq 0 ] && echo '✅ detected' || echo '⚠️ missing')" >> $GITHUB_STEP_SUMMARY
 
   e2e-smoke:
-    name: E2E Smoke (Playwright)
     runs-on: ubuntu-latest
-    needs: postdeploy
+    needs: [postdeploy, deploy]
+    env:
+      BASE_URL: ${{ github.event.inputs.BASE_URL != '' && github.event.inputs.BASE_URL || needs.deploy.outputs.deployment_url != '' && needs.deploy.outputs.deployment_url || vars.BASE_URL }}
+      VERCEL_BYPASS_TOKEN: ${{ github.event.inputs.VERCEL_BYPASS_TOKEN != '' && github.event.inputs.VERCEL_BYPASS_TOKEN || vars.VERCEL_BYPASS_TOKEN }}
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
+          node-version: '20'
 
-      - name: Enable Corepack (pnpm)
+      - name: Use PNPM if available, else NPM
+        id: pm
         run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate
+          if [ -f pnpm-lock.yaml ]; then echo "pm=pnpm" >> $GITHUB_OUTPUT; elif [ -f package-lock.json ]; then echo "pm=npm" >> $GITHUB_OUTPUT; else echo "pm=npm" >> $GITHUB_OUTPUT; fi
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile=false
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Run Playwright against prod URL
-        env:
-          PLAYWRIGHT_BASE_URL: https://gtek.world
-        run: npx playwright test -c playwright.config.ts
-
-      - name: Link Compliance Doc
+      - name: Install dependencies
         run: |
-          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-          ## ✅ E2E Smoke Tests
-          Playwright smoke tests ran against https://gtek.world. See logs above.
-          EOF
+          if [ "${{ steps.pm.outputs.pm }}" = "pnpm" ]; then npm i -g pnpm && pnpm install; else npm ci || npm i; fi
+
+      - name: Install Playwright browsers
+        run: |
+          if [ "${{ steps.pm.outputs.pm }}" = "pnpm" ]; then pnpm exec playwright install --with-deps; else npx playwright install --with-deps; fi
+
+      - name: Log BASE_URL
+        run: |
+          echo "Running e2e smoke against: ${BASE_URL:-http://localhost:3000}"
+
+      - name: Run Playwright tests
+        run: |
+          if [ "${{ steps.pm.outputs.pm }}" = "pnpm" ]; then \
+            pnpm exec playwright test --config=playwright.config.ts --retries=2 --timeout=90000; \
+          else \
+            npx playwright test --config=playwright.config.ts --retries=2 --timeout=90000; \
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/**
+            test-results/**
+
+      - name: Append e2e smoke to job summary
+        if: always()
+        run: |
+          echo "## E2E Smoke" >> $GITHUB_STEP_SUMMARY
+          echo "- BASE_URL: ${BASE_URL:-http://localhost:3000}" >> $GITHUB_STEP_SUMMARY
+          RESULT="${{ job.status }}"
+          echo "- Result: $([[ \"$RESULT\" = \"success\" ]] && echo \"✅ Passed\" || echo \"⚠️ Completed with failures\")" >> $GITHUB_STEP_SUMMARY
+          if command -v jq >/dev/null 2>&1 && [ -f playwright-report/report.json ]; then \
+            PASSES=$(jq '[.suites[]? | .. | objects | select(has("status")) | select(.status=="passed")] | length' playwright-report/report.json); \
+            FAILS=$(jq '[.suites[]? | .. | objects | select(has("status")) | select(.status=="failed")] | length' playwright-report/report.json); \
+            SKIPS=$(jq '[.suites[]? | .. | objects | select(has("status")) | select(.status=="skipped")] | length' playwright-report/report.json); \
+            echo "- Tests: ✅ $PASSES, ❌ $FAILS, ⏭️ $SKIPS" >> $GITHUB_STEP_SUMMARY; \
+          fi

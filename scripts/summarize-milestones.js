@@ -1,105 +1,107 @@
 #!/usr/bin/env node
-/*
- Summarize milestone statuses and task progress.
- - Scans reports/milestones/*.md
- - Extracts Status (not-started/in-progress/completed) and checkbox task counts
- - Writes .reports/milestones-summary.json and .reports/milestones-summary.md
- - Prints markdown summary to stdout (for GitHub Step Summary)
-*/
-
+/**
+ * scripts/summarize-milestones.js
+ * Scans for milestone files and produces concise summary outputs:
+ * - .reports/milestones-summary.md
+ * - .reports/milestones-summary.json
+ * Looks in MILESTONES_DIR env or common defaults under repo.
+ * Non-fatal; always exits 0.
+ */
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 
-const ROOT = process.cwd();
-const MILES_DIR = path.join(ROOT, 'reports', 'milestones');
-const REPORT_DIR = path.join(ROOT, '.reports');
+async function ensureDir(p){ await fsp.mkdir(p, { recursive: true }); }
 
-function ensureDir(p){
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+function listFilesSafe(dir) {
+  try { return fs.readdirSync(dir).map(f => path.join(dir, f)); } catch { return []; }
 }
 
-function parseMilestone(filePath){
-  const content = fs.readFileSync(filePath, 'utf8');
-  const lines = content.split(/\r?\n/);
+function gatherCandidates(base) {
+  const dirs = [
+    process.env.MILESTONES_DIR,
+    path.join(base, 'reports', 'milestones'),
+    path.join(base, '.reports', 'milestones'),
+    path.join(base, 'docs', 'milestones'),
+    path.join(base, 'governance', 'milestones'),
+  ].filter(Boolean);
+  const files = [];
+  for (const d of dirs) {
+    for (const f of listFilesSafe(d)) {
+      if (/\.(md|markdown|json)$/i.test(f)) files.push(f);
+    }
+  }
+  return files;
+}
 
-  // Title
-  const titleMatch = lines.find(l => /^#\s+/.test(l)) || path.basename(filePath);
-  const title = titleMatch.replace(/^#\s+/, '').trim();
+function summarizeFile(file) {
+  const name = path.basename(file);
+  const ext = path.extname(file).toLowerCase();
+  const stat = fs.statSync(file);
+  const size = stat.size;
+  let title = name;
+  let items = 0;
+  try {
+    const content = fs.readFileSync(file, 'utf8');
+    if (ext === '.json') {
+      const j = JSON.parse(content);
+      title = j.title || title;
+      items = Array.isArray(j.milestones) ? j.milestones.length : (Array.isArray(j.items) ? j.items.length : 0);
+    } else {
+      // crude markdown heuristic: count lines starting with - or * or number+
+      items = (content.match(/^\s*(?:[-*]|\d+\.)\s+/gm) || []).length;
+      const h1 = content.match(/^#\s+(.+)/m);
+      if (h1) title = h1[1].trim();
+    }
+  } catch {}
+  return { file, name, size, title, items, mtime: stat.mtime.toISOString() };
+}
 
-  // Find Status section
-  let status = 'not-started';
-  let inStatus = false;
-  for (const line of lines){
-    if (/^##\s+Status\s*$/.test(line)) { inStatus = true; continue; }
-    if (inStatus) {
-      const m = /^-\s*(.*)\s*$/.exec(line);
-      if (m) {
-        status = String(m[1]).toLowerCase().trim();
-      }
-      if (/^##\s+/.test(line)) { // next heading ended status block
-        break;
-      }
+async function main(){
+  const cwd = process.cwd();
+  const reportsDir = path.join(cwd, '.reports');
+  await ensureDir(reportsDir);
+
+  const candidates = gatherCandidates(cwd);
+  const summaries = candidates.map(summarizeFile).sort((a,b)=>a.name.localeCompare(b.name));
+
+  const md = [];
+  md.push('# Milestones Summary');
+  md.push('');
+  if (summaries.length === 0) {
+    md.push('- No milestone files found.');
+  } else {
+    md.push('| File | Title | Items | Size | Modified |');
+    md.push('| --- | --- | ---:| ---:| --- |');
+    for (const s of summaries) {
+      md.push(`| ${path.relative(cwd, s.file)} | ${s.title} | ${s.items} | ${s.size} | ${s.mtime} |`);
     }
   }
 
-  // Count tasks
-  let tasksTotal = 0, tasksDone = 0;
-  let inTasks = false;
-  for (const line of lines){
-    if (/^##\s+Tasks\s*$/.test(line)) { inTasks = true; continue; }
-    if (inTasks) {
-      if (/^##\s+/.test(line)) break; // end of section
-      const unchecked = /^-\s*\[\s\]/.test(line);
-      const checked = /^-\s*\[x\]/i.test(line);
-      if (unchecked || checked) {
-        tasksTotal++;
-        if (checked) tasksDone++;
-      }
-    }
-  }
+  const jsonOut = {
+    timestamp: new Date().toISOString(),
+    count: summaries.length,
+    files: summaries.map(s => ({
+      path: path.relative(cwd, s.file),
+      title: s.title,
+      items: s.items,
+      size: s.size,
+      mtime: s.mtime,
+    })),
+  };
 
-  return { title, file: path.relative(ROOT, filePath), status, tasksDone, tasksTotal };
+  await fsp.writeFile(path.join(reportsDir, 'milestones-summary.md'), md.join('\n'));
+  await fsp.writeFile(path.join(reportsDir, 'milestones-summary.json'), JSON.stringify(jsonOut, null, 2));
+  console.log('Milestones summary written to .reports/milestones-summary.{md,json}');
 }
 
-function main(){
-  ensureDir(REPORT_DIR);
-  if (!fs.existsSync(MILES_DIR)){
-    const empty = { totals: { completed: 0, 'in-progress': 0, 'not-started': 0 }, milestones: [] };
-    fs.writeFileSync(path.join(REPORT_DIR, 'milestones-summary.json'), JSON.stringify(empty, null, 2));
-    const md = `## Milestones Summary\n\n_No milestones directory found._\n`;
-    fs.writeFileSync(path.join(REPORT_DIR, 'milestones-summary.md'), md);
-    process.stdout.write(md + '\n');
-    return;
-  }
-
-  const files = fs.readdirSync(MILES_DIR).filter(f => f.endsWith('.md')).sort();
-  const milestones = files.map(f => parseMilestone(path.join(MILES_DIR, f)));
-
-  const totals = { completed: 0, 'in-progress': 0, 'not-started': 0 };
-  for (const m of milestones){
-    if (totals[m.status] !== undefined) totals[m.status]++;
-  }
-
-  const out = { totals, milestones };
-  fs.writeFileSync(path.join(REPORT_DIR, 'milestones-summary.json'), JSON.stringify(out, null, 2));
-
-  const rows = milestones.map(m => {
-    const pct = m.tasksTotal ? Math.round((m.tasksDone / m.tasksTotal) * 100) : 0;
-    return `| ${m.title} | ${m.status} | ${m.tasksDone}/${m.tasksTotal} (${pct}%) | [link](${m.file}) |`;
-  });
-
-  const md = [
-    '## Milestones Summary',
-    '',
-    `Totals: completed=${totals.completed}, in-progress=${totals['in-progress']}, not-started=${totals['not-started']}`,
-    '',
-    '| Milestone | Status | Tasks | File |',
-    '| --- | --- | --- | --- |',
-    ...rows
-  ].join('\n');
-
-  fs.writeFileSync(path.join(REPORT_DIR, 'milestones-summary.md'), md + '\n');
-  process.stdout.write(md + '\n');
-}
-
-main();
+main().catch((err) => {
+  const cwd = process.cwd();
+  const reportsDir = path.join(cwd, '.reports');
+  fs.mkdirSync(reportsDir, { recursive: true });
+  const out = { timestamp: new Date().toISOString(), error: String(err && err.stack || err) };
+  fs.writeFileSync(path.join(reportsDir, 'milestones-summary.json'), JSON.stringify(out, null, 2));
+  fs.writeFileSync(path.join(reportsDir, 'milestones-summary.md'), '# Milestones Summary\n\n- Error generating summary.');
+  console.log('Milestones summary (error) written.');
+  process.exit(0);
+});

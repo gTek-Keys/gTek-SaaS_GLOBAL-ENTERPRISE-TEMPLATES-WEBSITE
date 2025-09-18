@@ -1,0 +1,88 @@
+{
+  "timestamp": "2025-09-17T01:00:09.423Z",
+  "results": [
+    {
+      "label": "predeploy",
+      "ok": true,
+      "tookMs": 32,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "build-and-test",
+      "ok": true,
+      "tookMs": 6641,
+      "details": {
+        "buildCode": 0,
+        "testCode": 0
+      }
+    },
+    {
+      "label": "milestones",
+      "ok": true,
+      "tookMs": 28,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "sbom",
+      "ok": true,
+      "tookMs": 851,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "sbom-sign",
+      "ok": true,
+      "tookMs": 25,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "e2e-smoke",
+      "ok": false,
+      "tookMs": 102849,
+      "details": {
+        "code": 1
+      }
+    },
+    {
+      "label": "rollup",
+      "ok": true,
+      "tookMs": 28,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "quadrinary",
+      "ok": true,
+      "tookMs": 24,
+      "details": {
+        "code": 0
+      }
+    },
+    {
+      "label": "deploy",
+      "ok": true,
+      "tookMs": 0,
+      "details": {
+        "note": "Deployment handled in CI/CD"
+      }
+    },
+    {
+      "label": "postdeploy",
+      "ok": true,
+      "tookMs": 0,
+      "details": {
+        "skipped": true,
+        "reason": "BASE_URL not set"
+      }
+    }
+  ],
+  "ok": false
+}

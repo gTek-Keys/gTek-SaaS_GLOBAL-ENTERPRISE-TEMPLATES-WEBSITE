@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/api/governance/audit":{},"/api/health":{},"/api/governance/milestones":{},"/api/imos/bind":{},"/api/ipfs/pin":{}}}
+{"version":1,"functions":{"/api/governance/audit":{},"/api/health":{},"/api/governance/milestones":{},"/api/imos/bind":{},"/api/ipfs/pin":{},"/api/ping":{}}}

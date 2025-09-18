@@ -1,79 +1,83 @@
 {
-  "totals": {
-    "completed": 0,
-    "in-progress": 0,
-    "not-started": 10
-  },
-  "milestones": [
+  "timestamp": "2025-09-17T01:00:16.119Z",
+  "count": 11,
+  "files": [
     {
+      "path": "reports/milestones/01-repo-foundation.md",
       "title": "Milestone 1 — Repo Foundation",
-      "file": "reports/milestones/01-repo-foundation.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 933,
+      "mtime": "2025-09-16T09:48:05.826Z"
     },
     {
+      "path": "reports/milestones/02-supabase-backbone.md",
       "title": "Milestone 2 — Supabase Backbone",
-      "file": "reports/milestones/02-supabase-backbone.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 819,
+      "mtime": "2025-09-16T09:48:05.847Z"
     },
     {
+      "path": "reports/milestones/03-rate-limiting-enforcement.md",
       "title": "Milestone 3 — Rate Limiting Enforcement",
-      "file": "reports/milestones/03-rate-limiting-enforcement.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 856,
+      "mtime": "2025-09-16T09:48:05.847Z"
     },
     {
+      "path": "reports/milestones/04-audit-logs-as-evidence.md",
       "title": "Milestone 4 — Audit Logs as Evidence",
-      "file": "reports/milestones/04-audit-logs-as-evidence.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 850,
+      "mtime": "2025-09-16T09:48:05.847Z"
     },
     {
+      "path": "reports/milestones/05-governance-dashboard.md",
       "title": "Milestone 5 — Governance Dashboard",
-      "file": "reports/milestones/05-governance-dashboard.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 778,
+      "mtime": "2025-09-16T09:48:05.847Z"
     },
     {
+      "path": "reports/milestones/06-test-infrastructure.md",
       "title": "Milestone 6 — Test Infrastructure",
-      "file": "reports/milestones/06-test-infrastructure.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 768,
+      "mtime": "2025-09-16T09:48:05.847Z"
     },
     {
+      "path": "reports/milestones/07-sbom-provenance.md",
       "title": "Milestone 7 — SBOM & Provenance",
-      "file": "reports/milestones/07-sbom-provenance.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 752,
+      "mtime": "2025-09-16T09:48:05.856Z"
     },
     {
+      "path": "reports/milestones/08-contracts-and-token-flow.md",
       "title": "Milestone 8 — Contracts & Token Flow",
-      "file": "reports/milestones/08-contracts-and-token-flow.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 757,
+      "mtime": "2025-09-16T09:48:05.873Z"
     },
     {
+      "path": "reports/milestones/09-compliance-hub.md",
       "title": "Milestone 9 — Compliance Hub",
-      "file": "reports/milestones/09-compliance-hub.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 756,
+      "mtime": "2025-09-16T09:48:05.873Z"
     },
     {
+      "path": "reports/milestones/10-final-qa-and-delivery.md",
       "title": "Milestone 10 — Final QA & Delivery",
-      "file": "reports/milestones/10-final-qa-and-delivery.md",
-      "status": "not-started",
-      "tasksDone": 0,
-      "tasksTotal": 3
+      "items": 16,
+      "size": 772,
+      "mtime": "2025-09-16T09:48:05.873Z"
+    },
+    {
+      "path": "reports/milestones/M1.md",
+      "title": "Milestone 1",
+      "items": 2,
+      "size": 71,
+      "mtime": "2025-09-16T22:25:50.138Z"
     }
   ]
 }

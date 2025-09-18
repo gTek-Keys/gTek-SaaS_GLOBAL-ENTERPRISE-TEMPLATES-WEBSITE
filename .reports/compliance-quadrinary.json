@@ -1,0 +1,32 @@
+{
+  "timestamp": "2025-09-17T01:01:59.896Z",
+  "artifacts": {
+    "predeploy": true,
+    "sbom": true,
+    "milestones": true,
+    "complianceSummary": true
+  },
+  "gates": [
+    {
+      "id": "G1",
+      "label": "Predeploy report exists",
+      "pass": true
+    },
+    {
+      "id": "G2",
+      "label": "SBOM exists",
+      "pass": true
+    },
+    {
+      "id": "G3",
+      "label": "Milestones summary exists",
+      "pass": true
+    },
+    {
+      "id": "G4",
+      "label": "Compliance rollup exists",
+      "pass": true
+    }
+  ],
+  "result": "pass"
+}

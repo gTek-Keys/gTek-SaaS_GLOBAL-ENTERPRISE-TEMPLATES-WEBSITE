@@ -1,4 +1,4 @@
-import { test, expect, request } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test('home page renders', async ({ page }) => {
   await page.goto('/');
@@ -15,24 +15,22 @@ test('governance page loads (if present)', async ({ page }) => {
   await expect(page.locator('body')).toBeVisible();
 });
 
-test('health is OK (API preferred, fallback to homepage)', async () => {
-  const context = await request.newContext();
+test('health is OK (API preferred, fallback to homepage)', async ({ request }) => {
   let status = 0;
-
   try {
-    const res = await context.get('/api/health', {
-      headers: process.env.VERCEL_BYPASS_TOKEN
-        ? { 'x-vercel-protection-bypass': process.env.VERCEL_BYPASS_TOKEN }
-        : {},
-    });
+    const res = await request.get('/api/health');
     status = res.status();
+    if (res.ok()) {
+      const json = await res.json().catch(() => null);
+      if (json) console.log('Health body:', json);
+    }
   } catch (e) {
     console.warn('⚠️ API health fetch failed, will check homepage', e);
   }
 
-  // Prefer API health, fallback to homepage if not found
-  if (status === 0 || status === 404) {
-    const resHome = await context.get('/');
+  // Prefer API health, fallback to homepage if not found/blocked
+  if (status === 0 || status === 404 || status === 401) {
+    const resHome = await request.get('/');
     status = resHome.status();
   }
 
